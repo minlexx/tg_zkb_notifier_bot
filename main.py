@@ -1,76 +1,90 @@
 import configparser
-import requests
-import requests.exceptions
-import sys
 import time
+
+from zkillboard import ZKB
+from bot import ZKBBot
 
 
 def load_config() -> dict:
     ret = {
-        'token': ''
+        'token': '',
+        'corp_id': 0
     }
     ini = configparser.ConfigParser()
-    ini.read(['token.ini'], 'utf-8')
+    ini.read(['bot.ini'], 'utf-8')
     if ini.has_section('auth'):
         if 'token' in ini['auth']:
             ret['token'] = ini['auth']['token']
-    return ret
-
-
-def tg_bot_api_call_method_get(token: str, method_name: str, params: dict = None) -> requests.Response:
-    url = 'https://api.telegram.org/bot{}/{}'.format(token, method_name)
-    print('Requesting url: {}'.format(url))
-    # headers = {
-    #    'content-type', ''
-    # }
-    try:
-        response = requests.get(url, params=params, timeout=15)
-        # response.raise_for_status()
-        rjson = response.json()
-        if not rjson['ok']:
-            print('Request "{}" error: {}'.format(method_name, rjson['description']), file=sys.stderr)
-            return None
-        return response
-    except requests.exceptions.RequestException as re:
-        print(str(re))
-    return None
-
-
-def get_updates(token: str, last_update_id: int = -1) -> list:
-    ret = []
-    r = tg_bot_api_call_method_get(token, 'getUpdates', params=
-        {
-            'timeout': 5,
-            'offset': last_update_id + 1
-        })
-    if r is None:
-        return ret
-    reply = r.json()
-    ret = reply['result']
+    if ini.has_section('zkb'):
+        if 'corp_id' in ini['zkb']:
+            ret['corp_id'] = int(ini['zkb']['corp_id'])
     return ret
 
 
 def main():
     cfg = load_config()
     if cfg['token'] == '':
-        raise ValueError('Cannot function without a token!')
+        raise ValueError('Cannot function without a token! Check ini file.')
+    if cfg['corp_id'] == 0:
+        raise ValueError('Cannot function without a corp_id given! Check ini file.')
+
     token = cfg['token']
+    corp_id = cfg['corp_id']
 
-    last_update_id = 0
     should_stop = False
+    displayed_killids = []
+    zkb = ZKB({'debug': True})
+    bot = ZKBBot(token)
 
-    while not should_stop:
-        updates_list = get_updates(token, last_update_id)
-        i = 0
-        for update in updates_list:
-            i += 1
-            print('Update {}: {}'.format(i, str(update)))
-            update_id = update['update_id']
-            if update_id > last_update_id:
-                last_update_id = update_id
-                print('    new last_update_id = {}'.format(last_update_id))
+    # get initial ZKB kills
+    zkb.clear_url()
+    zkb.add_corporation(corp_id)
+    zkb.add_limit(10)
+    kills = zkb.go()
+    ##for kill in kills:
+    #    displayed_killids.append(kill['killmail_id'])
 
-        time.sleep(5)
+    print(kills)
+
+    try:
+        while not should_stop:
+            updates_list = bot.get_updates(bot.last_update_id)
+            i = 0
+            for update in updates_list:
+                i += 1
+                print('Update {}: {}'.format(i, str(update)))
+                update_id = update['update_id']
+                if update_id > bot.last_update_id:
+                    bot.last_update_id = update_id
+                    print('    new last_update_id = {}'.format(bot.last_update_id))
+                # place to process updates (messages)
+                if 'message' in update:
+                    bot.handle_message(update['message'])
+
+            # get next ZKB kills
+            zkb.clear_url()
+            zkb.add_corporation(corp_id)
+            zkb.add_limit(10)
+            kills = zkb.go()
+            kills_to_process = []
+            for kill in kills:
+                if kill['killmail_id'] not in displayed_killids:
+                    kills_to_process.append(kill)
+
+            print('{} new kill(s) to show.'.format(len(kills_to_process)))
+            for kill in kills_to_process:
+                for chat_id in bot.chats_notify:
+                    text = 'Kill: https://zkillboard.com/kill/{}/ at {}.'.format(
+                        kill['killmail_id'], kill['killmail_time'])
+                    bot.send_message_text(chat_id, text)
+                    time.sleep(1)
+                    displayed_killids.append(kill['killmail_id'])
+
+            time.sleep(5)
+
+    # exit on Ctrl+C
+    except KeyboardInterrupt:
+        print('Exiting by user request.')
 
 
 if __name__ == '__main__':
