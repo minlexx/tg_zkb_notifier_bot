@@ -8,7 +8,8 @@ from bot import ZKBBot
 def load_config() -> dict:
     ret = {
         'token': '',
-        'corp_id': 0
+        'corp_id': 0,
+        'refresh_interval_secs': 300
     }
     ini = configparser.ConfigParser()
     ini.read(['bot.ini'], 'utf-8')
@@ -18,6 +19,8 @@ def load_config() -> dict:
     if ini.has_section('zkb'):
         if 'corp_id' in ini['zkb']:
             ret['corp_id'] = int(ini['zkb']['corp_id'])
+        if 'refresh_interval_secs' in ini['zkb']:
+            ret['refresh_interval_secs'] = int(ini['zkb']['refresh_interval_secs'])
     return ret
 
 
@@ -30,9 +33,15 @@ def main():
 
     token = cfg['token']
     corp_id = cfg['corp_id']
+    zkb_refresh_interval_secs = cfg['refresh_interval_secs']
+    # safety check
+    if zkb_refresh_interval_secs < 15:
+        zkb_refresh_interval_secs = 15  # wait at least 15 seconds between requests to ZKB...
 
     should_stop = False
     displayed_killids = []
+    last_zkb_refresh_time = int(time.time())
+
     zkb = ZKB({'debug': True})
     bot = ZKBBot(token)
 
@@ -41,11 +50,11 @@ def main():
     zkb.add_corporation(corp_id)
     zkb.add_limit(10)
     kills = zkb.go()
-    ##for kill in kills:
-    #    displayed_killids.append(kill['killmail_id'])
+    for kill in kills:
+        displayed_killids.append(kill['killmail_id'])
+    print('Loaded and ignored {} initial kills.'.format(len(kills)))
 
-    print(kills)
-
+    # Main loop
     try:
         while not should_stop:
             updates_list = bot.get_updates(bot.last_update_id)
@@ -61,24 +70,39 @@ def main():
                 if 'message' in update:
                     bot.handle_message(update['message'])
 
+            cur_time = int(time.time())
             # get next ZKB kills
-            zkb.clear_url()
-            zkb.add_corporation(corp_id)
-            zkb.add_limit(10)
-            kills = zkb.go()
-            kills_to_process = []
-            for kill in kills:
-                if kill['killmail_id'] not in displayed_killids:
-                    kills_to_process.append(kill)
+            if cur_time - last_zkb_refresh_time > zkb_refresh_interval_secs:
+                last_zkb_refresh_time = cur_time
+                # restart request
+                zkb.clear_url()
+                # zkb.add_corporation(corp_id)
+                zkb.add_wspace()
+                zkb.add_limit(10)
+                kills = zkb.go()
+                # filter only kills that were not posted yet
+                kills_to_process = []
+                for kill in kills:
+                    if kill['killmail_id'] not in displayed_killids:
+                        kills_to_process.append(kill)
 
-            print('{} new kill(s) to show.'.format(len(kills_to_process)))
-            for kill in kills_to_process:
-                for chat_id in bot.chats_notify:
+                print('{} new kill(s) to show.'.format(len(kills_to_process)))
+
+                # collect all new kills to a single long text message to avoid spam
+                full_text = ''
+                for kill in kills_to_process:
                     text = 'Kill: https://zkillboard.com/kill/{}/ at {}.'.format(
                         kill['killmail_id'], kill['killmail_time'])
-                    bot.send_message_text(chat_id, text)
-                    time.sleep(1)
+                    if len(full_text) > 0:
+                        full_text += '\n\n'
+                    full_text += text
                     displayed_killids.append(kill['killmail_id'])
+
+                # patiently send full text to all involved chats
+                if len(full_text) > 0:
+                    for chat_id in bot.chats_notify:
+                        bot.send_message_text(chat_id, full_text, 'Markdown', True)
+                        time.sleep(1)
 
             time.sleep(5)
 
