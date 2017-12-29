@@ -99,3 +99,8 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+.idea/
+bot.ini
+eve_names.db
+saved_state.json
