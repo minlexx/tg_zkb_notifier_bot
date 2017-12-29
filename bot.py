@@ -1,6 +1,29 @@
+import json
 import requests
 import requests.exceptions
 import sys
+from typing import List, Union, Optional
+
+
+def create_reply_keyboard_markup(
+        buttons_texts: List[List[str]],
+        resize_keyboard: bool = False,
+        one_time_keyboard: bool = False,
+        selective: bool = False) -> str:
+    markup = dict()
+    markup['keyboard'] = []
+    markup['selective'] = selective
+    markup['resize_keyboard'] = resize_keyboard
+    markup['one_time_keyboard'] = one_time_keyboard
+    for button_row in buttons_texts:
+        button_row2 = []
+        for button_text in button_row:
+            keyboard_button = {
+                'text': button_text
+            }
+            button_row2.append(keyboard_button)
+        markup['keyboard'].append(button_row2)
+    return json.dumps(markup)
 
 
 class ZKBBot:
@@ -10,7 +33,7 @@ class ZKBBot:
         self.chats = {}
         self.chats_notify = []
 
-    def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> requests.Response:
+    def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> Optional[requests.Response]:
         url = 'https://api.telegram.org/bot{}/{}'.format(self.token, method_name)
         print('Requesting url: {}'.format(url))
         # headers = {
@@ -40,9 +63,9 @@ class ZKBBot:
         ret = reply['result']
         return ret
 
-    def send_message_text(self, chat_id: [str or int], text: str, parse_mode: str = 'Markdown',
+    def send_message_text(self, chat_id: Union[str, int], text: str, parse_mode: str = 'Markdown',
                           disable_web_page_preview: bool = False, disable_notification: bool = False,
-                          reply_to_message_id: int = 0) -> bool:
+                          reply_to_message_id: int = 0, reply_markup: str = None) -> bool:
         """
         See full description: https://core.telegram.org/bots/api#sendmessage
         :param chat_id:
@@ -51,6 +74,7 @@ class ZKBBot:
         :param disable_web_page_preview:
         :param disable_notification:
         :param reply_to_message_id:
+        :param reply_markup:
         :return:
         """
         params = {
@@ -62,7 +86,11 @@ class ZKBBot:
         }
         if reply_to_message_id > 0:
             params['reply_to_message_id'] = reply_to_message_id
+        if reply_markup is not None:
+            params['reply_markup'] = reply_markup
         r = self.tg_bot_api_call_method_get('sendMessage', params=params)
+        if r is None:
+            return False
         return True
 
     def handle_message(self, message: dict) -> None:
@@ -79,8 +107,25 @@ class ZKBBot:
             if chat['id'] not in self.chats:
                 print('Bot: handle_message: new chat id={} type={}'.format(chat['id'], chat['type']))
                 self.chats[chat['id']] = chat
-            if message['text'] == '/start':
+            if message['text'].startswith('/start'):
+                text = 'Hello! You can register to receive notifications from ZKillboard using /reg ' \
+                       'command, and unregister using /unreg command.'
+                reply_markup = create_reply_keyboard_markup(
+                    [['/reg', '/unreg']], resize_keyboard=True)
+                print('  reply_markup =', str(reply_markup))
+                self.send_message_text(chat['id'], text, 'Markdown', True, False, 0, reply_markup)
+            if message['text'] == '/help':
+                text = 'ZKillboard notifications bot.\n' \
+                       'Commands: \n' \
+                       '/reg - Register to receive notifications\n' \
+                       '/unreg - Unregister from receiving notifications\n' \
+                       '/help - This help message.'
+                self.send_message_text(chat['id'], text)
+            if message['text'].startswith('/reg'):
                 if chat['id'] not in self.chats_notify:
+                    print('Bot: registered new chat to notify: {}'.format(chat['id']))
                     self.chats_notify.append(chat['id'])
-            if message['text'] == '/stop':
-                self.chats_notify.remove(chat['id'])
+            if message['text'].startswith('/unreg'):
+                if chat['id'] in self.chats_notify:
+                    print('Bot: unregistered chat {}'.format(chat['id']))
+                    self.chats_notify.remove(chat['id'])
