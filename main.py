@@ -28,10 +28,20 @@ def load_config() -> dict:
 
 def zkb_get_updates(zkb: ZKB, corp_id: int) -> list:
     zkb.clear_url()
-    # zkb.add_corporation(corp_id)
-    zkb.add_wspace()
+    zkb.add_corporation(corp_id)
+    # zkb.add_wspace()  # developer_mode
     zkb.add_limit(10)
     return zkb.go()
+
+
+def format_isk_value(value: float) -> str:
+    if value > 1000000000:
+        return str(round(value / 1000000000)) + ' Bil'
+    if value > 1000000:
+        return str(round(value / 1000000)) + ' Mil'
+    if value > 1000:
+        return str(round(value / 1000)) + ' K'
+    return str(value)
 
 
 def main():
@@ -52,7 +62,7 @@ def main():
     displayed_killids = []
     last_zkb_refresh_time = int(time.time())
 
-    zkb = ZKB({'debug': True})
+    zkb = ZKB({'debug': False})
     bot = ZKBBot(token)
     bot.load_state()
 
@@ -60,9 +70,17 @@ def main():
 
     # get initial ZKB kills
     kills = zkb_get_updates(zkb, corp_id)
-    # for kill in kills:
-    #    displayed_killids.append(kill['killmail_id'])
-    # print('Loaded and ignored {} initial kills.'.format(len(kills)))
+    for kill in kills:
+        displayed_killids.append(kill['killmail_id'])
+    print('Loaded and ignored {} initial kills.'.format(len(kills)))
+
+    # remind all saved chats that they are registered
+    if len(bot.chats_notify) > 0:
+        for chatid in bot.chats_notify:
+            text = 'Bot started. You are registered to receive notifications, ' \
+                   'type /unreg to cancel.'
+            bot.send_message_text(chatid, text)
+            time.sleep(1)
 
     # Main loop
     try:
@@ -71,11 +89,9 @@ def main():
             i = 0
             for update in updates_list:
                 i += 1
-                print('Update {}: {}'.format(i, str(update)))
                 update_id = update['update_id']
                 if update_id > bot.last_update_id:
                     bot.last_update_id = update_id
-                    print('    new last_update_id = {}'.format(bot.last_update_id))
                 # place to process updates (messages)
                 if 'message' in update:
                     bot.handle_message(update['message'])
@@ -99,8 +115,6 @@ def main():
                 # collect all new kills to a single long text message to avoid spam
                 full_text = ''
                 for kill in kills_to_process:
-                    # ssid = kill['solar_system_id']
-                    ship_typeid = kill['victim']['ship_type_id']
                     text = ''
                     text += '*{}* '.format(kill['victim']['characterName'])
                     if kill['victim']['allianceName'] != '':
@@ -108,7 +122,7 @@ def main():
                             kill['victim']['corporationName'], kill['victim']['allianceName'])
                     else:
                         text += '({})'.format(kill['victim']['corporationName'])
-                    text += ' lost a *{}*'.format(ship_typeid)
+                    text += ' lost a *{}*'.format(kill['victim']['shipTypeName'])
                     text += ' to *{}* attacker(s) in *{}*'.format(
                         len(kill['attackers']), kill['solarSystemName'])
                     # kill time
@@ -122,7 +136,7 @@ def main():
                     else:
                         text += ' at {}.'.format(killtime_full)
                     text += '\n'
-                    text += 'Value: *{}* ISK. '.format(kill['zkb']['totalValue'])
+                    text += 'Value: *{}* ISK. '.format(format_isk_value(kill['zkb']['totalValue']))
                     text += 'https://zkillboard.com/kill/{}/'.format(kill['killmail_id'])
                     if len(full_text) > 0:
                         full_text += '\n\n'
