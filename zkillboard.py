@@ -221,6 +221,7 @@ class ZKB:
                     # fix ship_type_id => shipTypeID
                     if 'ship_type_id' in a_kill['victim']:
                         a_kill['victim']['shipTypeID'] = int(a_kill['victim']['ship_type_id'])
+                        a_kill['victim']['shipTypeName'] = ''
                     # process attackers
                     for atk in a_kill['attackers']:
                         atk['characterID'] = 0
@@ -255,6 +256,7 @@ class ZKB:
                     a_kill['finalBlowAttacker'] = finalBlow_attacker
                     # fix solar system id
                     a_kill['solarSystemID'] = a_kill['solar_system_id']
+                    a_kill['solarSystemName'] = ''
                     # kill price in ISK
                     if 'zkb' in a_kill:
                         if 'totalValue' in a_kill['zkb']:
