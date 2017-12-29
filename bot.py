@@ -127,7 +127,6 @@ class ZKBBot:
                        'command, and unregister using /unreg command.'
                 reply_markup = create_reply_keyboard_markup(
                     [['/reg', '/unreg']], resize_keyboard=True)
-                print('  reply_markup =', str(reply_markup))
                 self.send_message_text(chat['id'], text, 'Markdown', True, False, 0, reply_markup)
             if message['text'] == '/help':
                 text = 'ZKillboard notifications bot.\n' \
