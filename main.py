@@ -6,12 +6,15 @@ from zkillboard import ZKB
 from bot import ZKBBot
 from eve_names_resolver import EveNamesDb
 
+DEBUG = False
+
 
 def load_config() -> dict:
     ret = {
         'token': '',
         'corp_id': 0,
-        'refresh_interval_secs': 300
+        'refresh_interval_secs': 300,
+        'debug': False
     }
     ini = configparser.ConfigParser()
     ini.read(['bot.ini'], 'utf-8')
@@ -23,13 +26,18 @@ def load_config() -> dict:
             ret['corp_id'] = int(ini['zkb']['corp_id'])
         if 'refresh_interval_secs' in ini['zkb']:
             ret['refresh_interval_secs'] = int(ini['zkb']['refresh_interval_secs'])
+        if 'debug' in ini['zkb']:
+            ret['debug'] = ini.getboolean('zkb', 'debug')
     return ret
 
 
 def zkb_get_updates(zkb: ZKB, corp_id: int) -> list:
+    global DEBUG
     zkb.clear_url()
-    zkb.add_corporation(corp_id)
-    # zkb.add_wspace()  # developer_mode
+    if DEBUG:
+        zkb.add_wspace()  # developer_mode, use w-space kills (more updates)
+    else:
+        zkb.add_corporation(corp_id)
     zkb.add_limit(10)
     return zkb.go()
 
@@ -45,6 +53,7 @@ def format_isk_value(value: float) -> str:
 
 
 def main():
+    global DEBUG
     cfg = load_config()
     if cfg['token'] == '':
         raise ValueError('Cannot function without a token! Check ini file.')
@@ -54,6 +63,7 @@ def main():
     token = cfg['token']
     corp_id = cfg['corp_id']
     zkb_refresh_interval_secs = cfg['refresh_interval_secs']
+    DEBUG = cfg['debug']
     # safety check
     if zkb_refresh_interval_secs < 15:
         zkb_refresh_interval_secs = 15  # wait at least 15 seconds between requests to ZKB...
@@ -62,7 +72,7 @@ def main():
     displayed_killids = []
     last_zkb_refresh_time = int(time.time())
 
-    zkb = ZKB({'debug': False})
+    zkb = ZKB({'debug': DEBUG})
     bot = ZKBBot(token)
     bot.load_state()
 
