@@ -99,17 +99,18 @@ def main():
                 # collect all new kills to a single long text message to avoid spam
                 full_text = ''
                 for kill in kills_to_process:
-                    ssid = kill['solar_system_id']
+                    # ssid = kill['solar_system_id']
                     ship_typeid = kill['victim']['ship_type_id']
                     text = ''
-                    text += '*{}*'.format(kill['victim']['characterName'])
+                    text += '*{}* '.format(kill['victim']['characterName'])
                     if kill['victim']['allianceName'] != '':
-                        text += '({} / {})'.format(kill['victim']['corporationName'],
-                                                   kill['victim']['allianceName'])
+                        text += '({} / {})'.format(
+                            kill['victim']['corporationName'], kill['victim']['allianceName'])
                     else:
                         text += '({})'.format(kill['victim']['corporationName'])
                     text += ' lost a *{}*'.format(ship_typeid)
-                    text += ' to {} attacker(s) in *{}*'.format(len(kill['attackers']), ssid)
+                    text += ' to *{}* attacker(s) in *{}*'.format(
+                        len(kill['attackers']), kill['solarSystemName'])
                     # kill time
                     killtime_full = kill['kill_dt'].strftime('%Y-%m-%d %H:%M:%S')
                     killtime_time = kill['kill_dt'].strftime('%H:%M:%S')
