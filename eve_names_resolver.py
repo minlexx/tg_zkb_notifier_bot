@@ -33,6 +33,17 @@ class EsiNamesResolver:
             self.error_str = ex.error_string()
         return ret
 
+    def resolve_solarsystem_name(self, ssid: int) -> str:
+        ret = ''
+        try:
+            reply = self.esi_calls.get_universe_solarsystem(ssid)
+            if 'name' in reply:
+                ret = reply['name']
+            # sec_status = reply['security_status']
+        except ESIException as ex:
+            self.error_str = ex.error_string()
+        return ret
+
 
 class EveNamesDb:
     def __init__(self, names_db_filename: str):
@@ -67,6 +78,11 @@ class EveNamesDb:
         if 'allynames' not in existing_tables:
             cur = self._conn.cursor()
             cur.execute('CREATE TABLE allynames (id INTEGER PRIMARY KEY NOT NULL, name TEXT)')
+            self._conn.commit()
+            cur.close()
+        if 'solarsystems' not in existing_tables:
+            cur = self._conn.cursor()
+            cur.execute('CREATE TABLE solarsystems (id INTEGER PRIMARY KEY NOT NULL, name TEXT)')
             self._conn.commit()
             cur.close()
         self._write_lock.release()
@@ -104,6 +120,17 @@ class EveNamesDb:
             return row[0]
         return ''
 
+    def get_solarsystem_name(self, iid: int) -> str:
+        if iid <= 0:
+            return ''
+        cur = self._conn.cursor()
+        cur.execute('SELECT name FROM solarsystems WHERE id = ?', (iid,))
+        row = cur.fetchone()
+        cur.close()
+        if row is not None:
+            return row[0]
+        return ''
+
     def set_char_name(self, iid: int, name: str) -> None:
         if iid <= 0:
             return
@@ -134,11 +161,22 @@ class EveNamesDb:
         cur.close()
         self._write_lock.release()
 
+    def set_solarsystem_name(self, iid: int, name: str) -> None:
+        if iid <= 0:
+            return
+        self._write_lock.acquire()
+        cur = self._conn.cursor()
+        cur.execute('INSERT OR REPLACE INTO solarsystems (id, name) VALUES (?, ?)', (iid, name))
+        self._conn.commit()
+        cur.close()
+        self._write_lock.release()
+
     def fill_names_in_zkb_kills(self, kills: list) -> list:
         # 1. collect unknown IDs
         unknown_charids = []
         unknown_corpids = []
         unknown_allyids = []
+        unknown_ssids = []
         for kill in kills:
             if 'character_id' in kill['victim']:
                 char_id = int(kill['victim']['character_id'])
@@ -155,6 +193,11 @@ class EveNamesDb:
                 ally_name = self.get_ally_name(ally_id)
                 if (ally_name == '') and (ally_id >= 0):
                     unknown_allyids.append(ally_id)
+            if 'solar_system_id' in kill:
+                ssid = int(kill['solar_system_id'])
+                ssname = self.get_solarsystem_name(ssid)
+                if (ssid > 0) and (ssname == ''):
+                    unknown_ssids.append(ssid)
             for atk in kill['attackers']:
                 if 'character_id' in atk:
                     char_id = int(atk['character_id'])
@@ -182,9 +225,20 @@ class EveNamesDb:
         names = self._resolver.resolve_alliances_names(unknown_allyids)
         for obj in names:
             self.set_ally_name(obj['alliance_id'], obj['alliance_name'])
+        # 2.1 issue several requests, each for every solarsystem
+        for ssid in unknown_ssids:
+            ssname = self._resolver.resolve_solarsystem_name(ssid)
+            if ssname != '':
+                self.set_solarsystem_name(ssid, ssname)
 
         # 3. fill in gathered information
         for kill in kills:
+            if 'solar_system_id' in kill:
+                ssname = self.get_solarsystem_name(kill['solar_system_id'])
+                if ssname != '':
+                    kill['solarSystemName'] = ssname
+                else:
+                    kill['solarSystemName'] = ''
             victim = kill['victim']
             if 'character_id' in victim:
                 char_id = int(victim['character_id'])
