@@ -162,3 +162,36 @@ class ESICalls:
         if error_str != '':
             raise ESIException(error_str)
         return ret
+
+    def get_universe_solarsystem(self, ssid: int) -> dict:
+        ret = {}
+        error_str = ''
+        if ssid < 0:
+            return ret
+        try:
+            # https://esi.tech.ccp.is/ui/#/Universe/get_universe_systems_system_id
+            # This route expires daily at 11:05
+            url = '{}/universe/systems/{}/'.format(self.ESI_BASE_URL, ssid)
+            r = requests.get(url,
+                             headers={
+                                 'Content-Type': 'application/json',
+                                 'Accept': 'application/json',
+                                 'User-Agent': self.SSO_USER_AGENT
+                             },
+                             timeout=20)
+            response_text = r.text
+            if r.status_code == 200:
+                ret = json.loads(response_text)
+            else:
+                obj = json.loads(response_text)
+                if 'error' in obj:
+                    error_str = 'ESI error: {}'.format(obj['error'])
+                else:
+                    error_str = 'Error connecting to ESI server: HTTP status {}'.format(r.status_code)
+        except requests.exceptions.RequestException as e:
+            error_str = 'Error connection to ESI server: {}'.format(str(e))
+        except json.JSONDecodeError:
+            error_str = 'Failed to parse response JSON from CCP ESI server!'
+        if error_str != '':
+            raise ESIException(error_str)
+        return ret
