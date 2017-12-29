@@ -44,6 +44,16 @@ class EsiNamesResolver:
             self.error_str = ex.error_string()
         return ret
 
+    def resolve_type_name(self, typeid: int) -> str:
+        ret = ''
+        try:
+            reply = self.esi_calls.get_universe_type(typeid)
+            if 'name' in reply:
+                ret = reply['name']
+        except ESIException as ex:
+            self.error_str = ex.error_string()
+        return ret
+
 
 class EveNamesDb:
     def __init__(self, names_db_filename: str):
@@ -83,6 +93,11 @@ class EveNamesDb:
         if 'solarsystems' not in existing_tables:
             cur = self._conn.cursor()
             cur.execute('CREATE TABLE solarsystems (id INTEGER PRIMARY KEY NOT NULL, name TEXT)')
+            self._conn.commit()
+            cur.close()
+        if 'types' not in existing_tables:
+            cur = self._conn.cursor()
+            cur.execute('CREATE TABLE types (id INTEGER PRIMARY KEY NOT NULL, name TEXT)')
             self._conn.commit()
             cur.close()
         self._write_lock.release()
@@ -131,6 +146,17 @@ class EveNamesDb:
             return row[0]
         return ''
 
+    def get_type_name(self, iid: int) -> str:
+        if iid <= 0:
+            return ''
+        cur = self._conn.cursor()
+        cur.execute('SELECT name FROM types WHERE id = ?', (iid,))
+        row = cur.fetchone()
+        cur.close()
+        if row is not None:
+            return row[0]
+        return ''
+
     def set_char_name(self, iid: int, name: str) -> None:
         if iid <= 0:
             return
@@ -171,12 +197,23 @@ class EveNamesDb:
         cur.close()
         self._write_lock.release()
 
+    def set_type_name(self, iid: int, name: str) -> None:
+        if iid <= 0:
+            return
+        self._write_lock.acquire()
+        cur = self._conn.cursor()
+        cur.execute('INSERT OR REPLACE INTO types (id, name) VALUES (?, ?)', (iid, name))
+        self._conn.commit()
+        cur.close()
+        self._write_lock.release()
+
     def fill_names_in_zkb_kills(self, kills: list) -> list:
         # 1. collect unknown IDs
         unknown_charids = []
         unknown_corpids = []
         unknown_allyids = []
         unknown_ssids = []
+        unknown_typeids = []
         for kill in kills:
             if 'character_id' in kill['victim']:
                 char_id = int(kill['victim']['character_id'])
@@ -198,6 +235,11 @@ class EveNamesDb:
                 ssname = self.get_solarsystem_name(ssid)
                 if (ssid > 0) and (ssname == ''):
                     unknown_ssids.append(ssid)
+            if 'ship_type_id' in kill['victim']:
+                typeid = int(kill['victim']['ship_type_id'])
+                typename = self.get_type_name(typeid)
+                if (typeid > 0) and (typename == ''):
+                    unknown_typeids.append(typeid)
             for atk in kill['attackers']:
                 if 'character_id' in atk:
                     char_id = int(atk['character_id'])
@@ -230,6 +272,11 @@ class EveNamesDb:
             ssname = self._resolver.resolve_solarsystem_name(ssid)
             if ssname != '':
                 self.set_solarsystem_name(ssid, ssname)
+        # 2.2 issue several requests, each for every typeid
+        for typeid in unknown_typeids:
+            typename = self._resolver.resolve_type_name(typeid)
+            if typename != '':
+                self.set_type_name(typeid, typename)
 
         # 3. fill in gathered information
         for kill in kills:
@@ -237,8 +284,6 @@ class EveNamesDb:
                 ssname = self.get_solarsystem_name(kill['solar_system_id'])
                 if ssname != '':
                     kill['solarSystemName'] = ssname
-                else:
-                    kill['solarSystemName'] = ''
             victim = kill['victim']
             if 'character_id' in victim:
                 char_id = int(victim['character_id'])
@@ -258,6 +303,12 @@ class EveNamesDb:
                     ally_name = self.get_ally_name(ally_id)
                     if ally_name != '':
                         victim['allianceName'] = ally_name
+            if 'ship_type_id' in victim:
+                ship_typeid = int(victim['ship_type_id'])
+                if ship_typeid > 0:
+                    ship_typename = self.get_type_name(ship_typeid)
+                    if ship_typename != '':
+                        victim['shipTypeName'] = ship_typename
             for atk in kill['attackers']:
                 if 'character_id' in atk:
                     char_id = int(atk['character_id'])
@@ -277,5 +328,11 @@ class EveNamesDb:
                         ally_name = self.get_ally_name(ally_id)
                         if ally_name != '':
                             atk['allianceName'] = ally_name
+                if 'ship_type_id' in atk:
+                    ship_typeid = int(atk['ship_type_id'])
+                    if ship_typeid > 0:
+                        ship_typename = self.get_type_name(ship_typeid)
+                        if ship_typename != '':
+                            atk['shipTypeName'] = ship_typename
 
         return kills
