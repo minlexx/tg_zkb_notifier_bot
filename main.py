@@ -1,8 +1,10 @@
 import configparser
+import datetime
 import time
 
 from zkillboard import ZKB
 from bot import ZKBBot
+from eve_names_resolver import EveNamesDb
 
 
 def load_config() -> dict:
@@ -54,11 +56,13 @@ def main():
     bot = ZKBBot(token)
     bot.load_state()
 
+    eve_names = EveNamesDb('eve_names.db')
+
     # get initial ZKB kills
     kills = zkb_get_updates(zkb, corp_id)
-    for kill in kills:
-        displayed_killids.append(kill['killmail_id'])
-    print('Loaded and ignored {} initial kills.'.format(len(kills)))
+    # for kill in kills:
+    #    displayed_killids.append(kill['killmail_id'])
+    # print('Loaded and ignored {} initial kills.'.format(len(kills)))
 
     # Main loop
     try:
@@ -90,11 +94,35 @@ def main():
 
                 print('{} new kill(s) to show.'.format(len(kills_to_process)))
 
+                kills_to_process = eve_names.fill_names_in_zkb_kills(kills_to_process)
+
                 # collect all new kills to a single long text message to avoid spam
                 full_text = ''
                 for kill in kills_to_process:
-                    text = 'Kill: https://zkillboard.com/kill/{}/ at {}.'.format(
-                        kill['killmail_id'], kill['killmail_time'])
+                    ssid = kill['solar_system_id']
+                    ship_typeid = kill['victim']['ship_type_id']
+                    text = ''
+                    text += '*{}*'.format(kill['victim']['characterName'])
+                    if kill['victim']['allianceName'] != '':
+                        text += '({} / {})'.format(kill['victim']['corporationName'],
+                                                   kill['victim']['allianceName'])
+                    else:
+                        text += '({})'.format(kill['victim']['corporationName'])
+                    text += ' lost a *{}*'.format(ship_typeid)
+                    text += ' to {} attacker(s) in *{}*'.format(len(kill['attackers']), ssid)
+                    # kill time
+                    killtime_full = kill['kill_dt'].strftime('%Y-%m-%d %H:%M:%S')
+                    killtime_time = kill['kill_dt'].strftime('%H:%M:%S')
+                    days_ago = kill['days_ago']
+                    if days_ago == 0:
+                        text += ' today at {}.'.format(killtime_time)
+                    elif days_ago == 1:
+                        text += ' yesterday at {}.'.format(killtime_time)
+                    else:
+                        text += ' at {}.'.format(killtime_full)
+                    text += '\n'
+                    text += 'Value: *{}* ISK. '.format(kill['zkb']['totalValue'])
+                    text += 'https://zkillboard.com/kill/{}/'.format(kill['killmail_id'])
                     if len(full_text) > 0:
                         full_text += '\n\n'
                     full_text += text
