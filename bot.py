@@ -35,7 +35,7 @@ class ZKBBot:
 
     def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> Optional[requests.Response]:
         url = 'https://api.telegram.org/bot{}/{}'.format(self.token, method_name)
-        print('Requesting url: {}'.format(url))
+        # print('Requesting url: {}'.format(url))
         # headers = {
         #    'content-type', ''
         # }
