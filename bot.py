@@ -4,6 +4,8 @@ import requests.exceptions
 import sys
 from typing import List, Union, Optional
 
+from savesatte import SavedState
+
 
 def create_reply_keyboard_markup(
         buttons_texts: List[List[str]],
@@ -32,6 +34,19 @@ class ZKBBot:
         self.last_update_id = 0
         self.chats = {}
         self.chats_notify = []
+        self.savestate_filename = 'saved_state.json'
+
+    def load_state(self) -> bool:
+        ss = SavedState()
+        if ss.load(self.savestate_filename):
+            self.chats_notify = ss.involved_chatids
+            return True
+        return False
+
+    def save_state(self) -> bool:
+        ss = SavedState()
+        ss.involved_chatids = self.chats_notify
+        return ss.save(self.savestate_filename)
 
     def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> Optional[requests.Response]:
         url = 'https://api.telegram.org/bot{}/{}'.format(self.token, method_name)

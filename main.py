@@ -24,6 +24,14 @@ def load_config() -> dict:
     return ret
 
 
+def zkb_get_updates(zkb: ZKB, corp_id: int) -> list:
+    zkb.clear_url()
+    # zkb.add_corporation(corp_id)
+    zkb.add_wspace()
+    zkb.add_limit(10)
+    return zkb.go()
+
+
 def main():
     cfg = load_config()
     if cfg['token'] == '':
@@ -44,12 +52,10 @@ def main():
 
     zkb = ZKB({'debug': True})
     bot = ZKBBot(token)
+    bot.load_state()
 
     # get initial ZKB kills
-    zkb.clear_url()
-    zkb.add_corporation(corp_id)
-    zkb.add_limit(10)
-    kills = zkb.go()
+    kills = zkb_get_updates(zkb, corp_id)
     for kill in kills:
         displayed_killids.append(kill['killmail_id'])
     print('Loaded and ignored {} initial kills.'.format(len(kills)))
@@ -74,12 +80,8 @@ def main():
             # get next ZKB kills
             if cur_time - last_zkb_refresh_time > zkb_refresh_interval_secs:
                 last_zkb_refresh_time = cur_time
-                # restart request
-                zkb.clear_url()
-                # zkb.add_corporation(corp_id)
-                zkb.add_wspace()
-                zkb.add_limit(10)
-                kills = zkb.go()
+                # send request
+                kills = zkb_get_updates(zkb, corp_id)
                 # filter only kills that were not posted yet
                 kills_to_process = []
                 for kill in kills:
@@ -109,6 +111,8 @@ def main():
     # exit on Ctrl+C
     except KeyboardInterrupt:
         print('Exiting by user request.')
+
+    bot.save_state()
 
 
 if __name__ == '__main__':
