@@ -25,7 +25,7 @@ class SavedState:
                 cfg = {
                     'involved_chatids': self.involved_chatids
                 }
-                json.dump(cfg, indent=True)
+                json.dump(cfg, fp, indent=True)
         except IOError as e:
             print('Failed to save state: {}'.format(str(e)), file=sys.stderr)
             return False
