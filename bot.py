@@ -4,7 +4,7 @@ import requests.exceptions
 import sys
 from typing import List, Union, Optional
 
-from savesatte import SavedState
+from savestate import SavedState
 
 
 def create_reply_keyboard_markup(
