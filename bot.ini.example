@@ -2,6 +2,12 @@
 token = <put_token_here>
 
 [zkb]
-corp_id = 98441646
+# select mode to report:
+# - all: all kills from ZKB
+# - w-space: w-space kills
+# - corp: only corp skills (requires corp_id set)
+# choose one of: all, w-space, corp
+mode = all
+corp_id = 0
 refresh_interval_secs = 120
 debug = False
