@@ -7,11 +7,13 @@ from bot import ZKBBot
 from eve_names_resolver import EveNamesDb
 
 DEBUG = False
+MODE = 'all'
 
 
 def load_config() -> dict:
     ret = {
         'token': '',
+        'mode': 'all',
         'corp_id': 0,
         'refresh_interval_secs': 300,
         'debug': False
@@ -22,6 +24,8 @@ def load_config() -> dict:
         if 'token' in ini['auth']:
             ret['token'] = ini['auth']['token']
     if ini.has_section('zkb'):
+        if 'mode' in ini['zkb']:
+            ret['mode'] = ini['zkb']['mode']
         if 'corp_id' in ini['zkb']:
             ret['corp_id'] = int(ini['zkb']['corp_id'])
         if 'refresh_interval_secs' in ini['zkb']:
@@ -31,14 +35,19 @@ def load_config() -> dict:
     return ret
 
 
-def zkb_get_updates(zkb: ZKB, corp_id: int) -> list:
-    global DEBUG
+def zkb_get_kills(zkb: ZKB, corp_id: int) -> list:
+    global MODE
     zkb.clear_url()
-    if DEBUG:
-        zkb.add_wspace()  # developer_mode, use w-space kills (more updates)
-    else:
+    if MODE == 'all':
+        zkb.add_limit(50)
+    elif MODE == 'w-space':
+        zkb.add_wspace()
+        zkb.add_limit(30)
+    elif MODE == 'corp':
         zkb.add_corporation(corp_id)
-    zkb.add_limit(10)
+        zkb.add_limit(20)
+    else:
+        raise ValueError('Mode should be one of: all, w-space, corp. Check ini file.')
     return zkb.go()
 
 
@@ -53,14 +62,18 @@ def format_isk_value(value: float) -> str:
 
 
 def main():
-    global DEBUG
+    global DEBUG, MODE
     cfg = load_config()
     if cfg['token'] == '':
         raise ValueError('Cannot function without a token! Check ini file.')
-    if cfg['corp_id'] == 0:
-        raise ValueError('Cannot function without a corp_id given! Check ini file.')
+    if cfg['mode'] not in ['all', 'w-space', 'corp']:
+        raise ValueError('Mode should be one of: all, w-space, corp. Check ini file.')
+    if cfg['mode'] == 'corp':
+        if cfg['corp_id'] == 0:
+            raise ValueError('Cannot function without a corp_id given! Check ini file.')
 
     token = cfg['token']
+    MODE = cfg['mode']
     corp_id = cfg['corp_id']
     zkb_refresh_interval_secs = cfg['refresh_interval_secs']
     DEBUG = cfg['debug']
@@ -79,7 +92,7 @@ def main():
     eve_names = EveNamesDb('eve_names.db')
 
     # get initial ZKB kills
-    kills = zkb_get_updates(zkb, corp_id)
+    kills = zkb_get_kills(zkb, corp_id)
     for kill in kills:
         displayed_killids.append(kill['killmail_id'])
     print('Loaded and ignored {} initial kills.'.format(len(kills)))
@@ -111,7 +124,7 @@ def main():
             if cur_time - last_zkb_refresh_time > zkb_refresh_interval_secs:
                 last_zkb_refresh_time = cur_time
                 # send request
-                kills = zkb_get_updates(zkb, corp_id)
+                kills = zkb_get_kills(zkb, corp_id)
                 # filter only kills that were not posted yet
                 kills_to_process = []
                 for kill in kills:
