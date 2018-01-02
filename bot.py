@@ -139,7 +139,9 @@ class ZKBBot:
                 if chat['id'] not in self.chats_notify:
                     print('Bot: registered new chat to notify: {}'.format(chat['id']))
                     self.chats_notify.append(chat['id'])
+                    self.save_state()
             if message['text'].startswith('/unreg'):
                 if chat['id'] in self.chats_notify:
                     print('Bot: unregistered chat {}'.format(chat['id']))
                     self.chats_notify.remove(chat['id'])
+                    self.save_state()
