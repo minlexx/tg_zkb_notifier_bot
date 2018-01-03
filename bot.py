@@ -128,26 +128,29 @@ class ZKBBot:
             if chat['id'] not in self.chats:
                 self.log.debug('new chat id={} type={}'.format(chat['id'], chat['type']))
                 self.chats[chat['id']] = chat
-            if message['text'].startswith('/start'):
-                text = 'Hello! You can register to receive notifications from ZKillboard using /reg ' \
-                       'command, and unregister using /unreg command.'
-                reply_markup = create_reply_keyboard_markup(
-                    [['/reg', '/unreg']], resize_keyboard=True)
-                self.send_message_text(chat['id'], text, 'Markdown', True, False, 0, reply_markup)
-            if message['text'] == '/help':
-                text = 'ZKillboard notifications bot.\n' \
-                       'Commands: \n' \
-                       '/reg - Register to receive notifications\n' \
-                       '/unreg - Unregister from receiving notifications\n' \
-                       '/help - This help message.'
-                self.send_message_text(chat['id'], text)
-            if message['text'].startswith('/reg'):
-                if chat['id'] not in self.chats_notify:
-                    self.log.info('registered new chat to notify: {}'.format(chat['id']))
-                    self.chats_notify.append(chat['id'])
-                    self.save_state()
-            if message['text'].startswith('/unreg'):
-                if chat['id'] in self.chats_notify:
-                    self.log.info('unregistered chat {}'.format(chat['id']))
-                    self.chats_notify.remove(chat['id'])
-                    self.save_state()
+            if 'text' in message:
+                if message['text'].startswith('/start'):
+                    text = 'Hello! You can register to receive notifications from ZKillboard using /reg ' \
+                           'command, and unregister using /unreg command.'
+                    reply_markup = create_reply_keyboard_markup(
+                        [['/reg', '/unreg']], resize_keyboard=True)
+                    self.send_message_text(chat['id'], text, 'Markdown', True, False, 0, reply_markup)
+                if message['text'] == '/help':
+                    text = 'ZKillboard notifications bot.\n' \
+                           'Commands: \n' \
+                           '/reg - Register to receive notifications\n' \
+                           '/unreg - Unregister from receiving notifications\n' \
+                           '/help - This help message.'
+                    self.send_message_text(chat['id'], text)
+                if message['text'].startswith('/reg'):
+                    if chat['id'] not in self.chats_notify:
+                        self.log.info('registered new chat to notify: {}'.format(chat['id']))
+                        self.chats_notify.append(chat['id'])
+                        self.save_state()
+                if message['text'].startswith('/unreg'):
+                    if chat['id'] in self.chats_notify:
+                        self.log.info('unregistered chat {}'.format(chat['id']))
+                        self.chats_notify.remove(chat['id'])
+                        self.save_state()
+            else:
+                self.log.debug('Got message with no text: {}'.format(message))
