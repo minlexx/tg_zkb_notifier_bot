@@ -1,9 +1,11 @@
 import json
+import logging
 import requests
 import requests.exceptions
 import sys
 from typing import List, Union, Optional
 
+from bot_logger import create_logger
 from savestate import SavedState
 
 
@@ -35,22 +37,26 @@ class ZKBBot:
         self.chats = {}
         self.chats_notify = []
         self.savestate_filename = 'saved_state.json'
+        self.log = create_logger(__name__, level=logging.DEBUG, stream=sys.stdout, filename='bot.log')
 
     def load_state(self) -> bool:
         ss = SavedState()
         if ss.load(self.savestate_filename):
             self.chats_notify = ss.involved_chatids
+            self.log.debug('Loaded save state, involved chats: {}'.format(self.chats_notify))
             return True
+        self.log.debug('Could not load save state')
         return False
 
     def save_state(self) -> bool:
         ss = SavedState()
         ss.involved_chatids = self.chats_notify
-        return ss.save(self.savestate_filename)
+        ok = ss.save(self.savestate_filename)
+        self.log.debug('Saving state... ok={}'.format(ok))
 
     def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> Optional[requests.Response]:
         url = 'https://api.telegram.org/bot{}/{}'.format(self.token, method_name)
-        # print('Requesting url: {}'.format(url))
+        self.log.debug('Requesting url: {}'.format(url))
         # headers = {
         #    'content-type', ''
         # }
@@ -59,11 +65,11 @@ class ZKBBot:
             # response.raise_for_status()
             rjson = response.json()
             if not rjson['ok']:
-                print('Request "{}" error: {}'.format(method_name, rjson['description']), file=sys.stderr)
+                self.log.error('Request "{}" error: {}'.format(method_name, rjson['description']))
                 return None
             return response
         except requests.exceptions.RequestException as re:
-            print(str(re))
+            self.log.exception('Exception during telegram API call', exc_info=True)
         return None
 
     def get_updates(self, last_update_id: int = -1) -> list:
@@ -120,7 +126,7 @@ class ZKBBot:
         if 'chat' in message:
             chat = message['chat']
             if chat['id'] not in self.chats:
-                print('Bot: handle_message: new chat id={} type={}'.format(chat['id'], chat['type']))
+                self.log.debug('new chat id={} type={}'.format(chat['id'], chat['type']))
                 self.chats[chat['id']] = chat
             if message['text'].startswith('/start'):
                 text = 'Hello! You can register to receive notifications from ZKillboard using /reg ' \
@@ -137,11 +143,11 @@ class ZKBBot:
                 self.send_message_text(chat['id'], text)
             if message['text'].startswith('/reg'):
                 if chat['id'] not in self.chats_notify:
-                    print('Bot: registered new chat to notify: {}'.format(chat['id']))
+                    self.log.info('registered new chat to notify: {}'.format(chat['id']))
                     self.chats_notify.append(chat['id'])
                     self.save_state()
             if message['text'].startswith('/unreg'):
                 if chat['id'] in self.chats_notify:
-                    print('Bot: unregistered chat {}'.format(chat['id']))
+                    self.log.info('unregistered chat {}'.format(chat['id']))
                     self.chats_notify.remove(chat['id'])
                     self.save_state()

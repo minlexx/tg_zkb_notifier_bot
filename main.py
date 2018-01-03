@@ -1,7 +1,10 @@
 import configparser
 import datetime
+import logging
+import sys
 import time
 
+from bot_logger import create_logger
 from zkillboard import ZKB
 from bot import ZKBBot
 from eve_names_resolver import EveNamesDb
@@ -72,6 +75,11 @@ def main():
         if cfg['corp_id'] == 0:
             raise ValueError('Cannot function without a corp_id given! Check ini file.')
 
+    loglevel = logging.INFO
+    if DEBUG:
+        loglevel = logging.INFO
+    logger = create_logger(__name__, loglevel, sys.stdout, 'bot.log')
+
     token = cfg['token']
     MODE = cfg['mode']
     corp_id = cfg['corp_id']
@@ -91,11 +99,15 @@ def main():
 
     eve_names = EveNamesDb('eve_names.db')
 
+    logger.info('Starting, operation mode={}'.format(MODE))
+    if MODE == 'corp':
+        logger.info('    corp_id={}'.format(corp_id))
+
     # get initial ZKB kills
     kills = zkb_get_kills(zkb, corp_id)
     for kill in kills:
         displayed_killids.append(kill['killmail_id'])
-    print('Loaded and ignored {} initial kills.'.format(len(kills)))
+    logger.info('Loaded and ignored {} initial kills.'.format(len(kills)))
 
     # remind all saved chats that they are registered
     if len(bot.chats_notify) > 0:
@@ -109,6 +121,7 @@ def main():
     try:
         while not should_stop:
             updates_list = bot.get_updates(bot.last_update_id)
+            logger.debug(' got {} events from telegram'.format(len(updates_list)))
             i = 0
             for update in updates_list:
                 i += 1
@@ -131,7 +144,7 @@ def main():
                     if kill['killmail_id'] not in displayed_killids:
                         kills_to_process.append(kill)
 
-                print('{} new kill(s) to show.'.format(len(kills_to_process)))
+                logger.info('{} new kill(s) to show.'.format(len(kills_to_process)))
 
                 kills_to_process = eve_names.fill_names_in_zkb_kills(kills_to_process)
 
@@ -176,9 +189,10 @@ def main():
 
     # exit on Ctrl+C
     except KeyboardInterrupt:
-        print('Exiting by user request.')
+        logger.info('Exiting by user request.')
 
     bot.save_state()
+    logging.shutdown()
 
 
 if __name__ == '__main__':
