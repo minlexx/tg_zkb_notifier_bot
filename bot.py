@@ -135,6 +135,9 @@ class ZKBBot:
         #             'username': 'minlexx', 'is_bot': False, 'language_code': 'en'},
         #     'text': 'еее'
         # }
+        message_id = 0
+        if 'message_id' in message:
+            message_id = message['message_id']
         if 'chat' in message:
             chat = message['chat']
             if chat['id'] not in self.chats:
@@ -159,10 +162,12 @@ class ZKBBot:
                         self.log.info('registered new chat to notify: {}'.format(chat['id']))
                         self.chats_notify.append(chat['id'])
                         self.save_state()
+                        self.send_message_text(chat['id'], 'Ok, registered.', reply_to_message_id=message_id)
                 if message['text'].startswith('/unreg'):
                     if chat['id'] in self.chats_notify:
                         self.log.info('unregistered chat {}'.format(chat['id']))
                         self.chats_notify.remove(chat['id'])
                         self.save_state()
+                        self.send_message_text(chat['id'], 'Unregistered.', reply_to_message_id=message_id)
             else:
                 self.log.debug('Got message with no text: {}'.format(message))
