@@ -42,13 +42,13 @@ def zkb_get_kills(zkb: ZKB, corp_id: int) -> list:
     global MODE
     zkb.clear_url()
     if MODE == 'all':
-        zkb.add_limit(50)
+        zkb.add_limit(30)
     elif MODE == 'w-space':
         zkb.add_wspace()
-        zkb.add_limit(30)
+        zkb.add_limit(25)
     elif MODE == 'corp':
         zkb.add_corporation(corp_id)
-        zkb.add_limit(20)
+        zkb.add_limit(15)
     else:
         raise ValueError('Mode should be one of: all, w-space, corp. Check ini file.')
     return zkb.go()
