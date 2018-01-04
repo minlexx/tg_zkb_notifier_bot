@@ -56,7 +56,7 @@ class ZKBBot:
 
     def tg_bot_api_call_method_get(self, method_name: str, params: dict = None) -> Optional[requests.Response]:
         url = 'https://api.telegram.org/bot{}/{}'.format(self.token, method_name)
-        self.log.debug('Requesting url: {}'.format(url))
+        # self.log.debug('Requesting url: {}'.format(url))
         # headers = {
         #    'content-type', ''
         # }
@@ -98,20 +98,32 @@ class ZKBBot:
         :param reply_markup:
         :return:
         """
-        params = {
-            'chat_id': chat_id,
-            'text': text,
-            'parse_mode': parse_mode,
-            'disable_web_page_preview': disable_web_page_preview,
-            'disable_notification': disable_notification
-        }
-        if reply_to_message_id > 0:
-            params['reply_to_message_id'] = reply_to_message_id
-        if reply_markup is not None:
-            params['reply_markup'] = reply_markup
-        r = self.tg_bot_api_call_method_get('sendMessage', params=params)
-        if r is None:
-            return False
+
+        text_parts = []
+
+        if len(text) > 4096:
+            while len(text) > 4096:
+                text_part = text[0:4096]
+                text_parts.append(text_part)
+                text = text[4096:]
+
+        text_parts.append(text)
+
+        for a_text in text_parts:
+            params = {
+                'chat_id': chat_id,
+                'text': a_text,
+                'parse_mode': parse_mode,
+                'disable_web_page_preview': disable_web_page_preview,
+                'disable_notification': disable_notification
+            }
+            if reply_to_message_id > 0:
+                params['reply_to_message_id'] = reply_to_message_id
+            if reply_markup is not None:
+                params['reply_markup'] = reply_markup
+            r = self.tg_bot_api_call_method_get('sendMessage', params=params)
+            if r is None:
+                return False
         return True
 
     def handle_message(self, message: dict) -> None:
